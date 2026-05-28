@@ -9,11 +9,11 @@ services:
       - NODE_ENV=production
       - MONGO_URI=mongodb://mongo:27017/thehub
     networks:
-      - thehub
+      - thehub_default
       - internal
 
 networks:
-  thehub:
+  thehub_default:
     external: true
   internal:
     driver: bridge
