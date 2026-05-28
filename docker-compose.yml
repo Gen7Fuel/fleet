@@ -1,0 +1,19 @@
+services:
+  fleet-portal:
+    build: .
+    container_name: fleet-portal
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/thehub
+    networks:
+      - thehub
+      - internal
+
+networks:
+  thehub:
+    external: true
+  internal:
+    driver: bridge
