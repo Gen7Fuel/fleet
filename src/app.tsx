@@ -2,28 +2,64 @@
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import bcrypt from 'bcryptjs'
+import { ObjectId } from 'mongodb'
 import { createSession, getSession, destroySession } from './session'
 import { getDb } from './db'
-import { cards, getTotalMonthlySpend } from './data/demo'
 import { LoginPage } from './components/LoginPage'
 import { DashboardPage } from './components/DashboardPage'
 import { CardDetailPage } from './components/CardDetailPage'
-import type { FuelType } from './types'
+import type { FleetCard, CardStatus, PinStatus } from './types'
 
 const CDN_UPLOAD = 'https://app.gen7fuel.com/cdn/upload'
 const CDN_BASE   = 'https://app.gen7fuel.com/cdn/download'
 
-type Variables = { username: string; company: string }
+type Variables = { username: string; company: string; customerId: string }
 
 const app = new Hono<{ Variables: Variables }>()
 
 app.use('/static/*', serveStatic({ root: './' }))
+
+function docToCard(doc: any): FleetCard {
+  return {
+    id: doc._id.toString(),
+    fleetCardNumber: String(doc.fleetCardNumber ?? ''),
+    status: (doc.status ?? 'active') as CardStatus,
+    driverName: String(doc.driverName ?? ''),
+    driverPhoto: doc.driverPhoto ? String(doc.driverPhoto) : undefined,
+    vehicleMakeModel: String(doc.vehicleMakeModel ?? ''),
+    numberPlate: String(doc.numberPlate ?? ''),
+    customerName: String(doc.customerName ?? ''),
+    customerId: String(doc.customerId ?? ''),
+    site: String(doc.site ?? ''),
+    notes: String(doc.notes ?? ''),
+    pinStatus: (doc.pinStatus ?? 'not_set') as PinStatus,
+    issuedDate: doc.createdAt ? new Date(doc.createdAt).toISOString().slice(0, 10) : undefined,
+    transactions: [],
+  }
+}
+
+async function loadCards(customerId: string): Promise<FleetCard[]> {
+  const db = await getDb()
+  const docs = await db.collection('fleets').find({ customerId }).toArray()
+  return docs.map(docToCard)
+}
+
+async function loadCard(id: string): Promise<FleetCard | null> {
+  try {
+    const db = await getDb()
+    const doc = await db.collection('fleets').findOne({ _id: new ObjectId(id) })
+    return doc ? docToCard(doc) : null
+  } catch {
+    return null
+  }
+}
 
 async function requireAuth(c: any, next: any) {
   const session = getSession(c)
   if (!session) return c.redirect('/')
   c.set('username', session.username)
   c.set('company', session.company)
+  c.set('customerId', session.customerId)
   await next()
 }
 
@@ -42,13 +78,11 @@ app.post('/login', async (c) => {
 
   try {
     const db = await getDb()
-    const account = await db
-      .collection('fleetcustomers')
-      .findOne({ username })
+    const account = await db.collection('fleetcustomers').findOne({ username })
 
     console.log('[login] username:', username, '| account found:', !!account)
     if (account && await bcrypt.compare(password, String(account.password))) {
-      createSession(c, String(account.username), String(account.name))
+      createSession(c, String(account.username), String(account.name), account._id.toString())
       return c.redirect('/dashboard')
     }
     if (account) console.log('[login] password mismatch')
@@ -66,20 +100,20 @@ app.get('/logout', (c) => {
 })
 
 // Dashboard
-app.get('/dashboard', requireAuth, (c) => {
+app.get('/dashboard', requireAuth, async (c) => {
+  const cards = await loadCards(c.get('customerId'))
   return c.html(
     <DashboardPage
       username={c.get('username')}
       company={c.get('company')}
       cards={cards}
-      totalMonthlySpend={getTotalMonthlySpend()}
     />
   )
 })
 
 // Card detail
-app.get('/cards/:id', requireAuth, (c) => {
-  const card = cards.find(card => card.id === c.req.param('id'))
+app.get('/cards/:id', requireAuth, async (c) => {
+  const card = await loadCard(c.req.param('id'))
   if (!card) return c.redirect('/dashboard')
   return c.html(
     <CardDetailPage
@@ -94,39 +128,46 @@ app.get('/cards/:id', requireAuth, (c) => {
 
 // Update card fields
 app.post('/cards/:id', requireAuth, async (c) => {
-  const card = cards.find(card => card.id === c.req.param('id'))
+  const id = c.req.param('id')
+  const card = await loadCard(id)
   if (!card) return c.redirect('/dashboard')
 
   const body = await c.req.parseBody()
+  const update: Record<string, string> = {}
 
-  card.driver.name = String(body.driverName ?? card.driver.name).trim()
-  card.vehicle.numberPlate = String(body.numberPlate ?? card.vehicle.numberPlate).trim().toUpperCase()
-  card.vehicle.make = String(body.vehicleMake ?? card.vehicle.make).trim()
-  card.vehicle.model = String(body.vehicleModel ?? card.vehicle.model).trim()
+  const driverName = String(body.driverName ?? '').trim()
+  if (driverName) update.driverName = driverName
 
-  const year = parseInt(String(body.vehicleYear ?? ''))
-  if (!isNaN(year) && year >= 1980 && year <= 2030) card.vehicle.year = year
+  const numberPlate = String(body.numberPlate ?? '').trim().toUpperCase()
+  if (numberPlate) update.numberPlate = numberPlate
 
-  const limit = parseFloat(String(body.spendingLimit ?? ''))
-  if (!isNaN(limit) && limit > 0) card.monthlySpendingLimit = limit
+  const vehicleMakeModel = String(body.vehicleMakeModel ?? '').trim()
+  if (vehicleMakeModel) update.vehicleMakeModel = vehicleMakeModel
 
-  const fuel = String(body.fuelType ?? '')
-  const validFuels: FuelType[] = ['any', 'diesel', 'petrol']
-  if (validFuels.includes(fuel as FuelType)) card.fuelType = fuel as FuelType
+  try {
+    const db = await getDb()
+    await db.collection('fleets').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: update }
+    )
+  } catch (err) {
+    console.error('[card update] DB error:', err)
+  }
 
-  return c.redirect(`/cards/${card.id}?saved=1`)
+  return c.redirect(`/cards/${id}?saved=1`)
 })
 
 // Upload driver photo
 app.post('/cards/:id/upload-photo', requireAuth, async (c) => {
-  const card = cards.find(card => card.id === c.req.param('id'))
+  const id = c.req.param('id')
+  const card = await loadCard(id)
   if (!card) return c.redirect('/dashboard')
 
   const body = await c.req.parseBody()
   const file = body['photo']
 
   if (!file || !(file instanceof File) || file.size === 0) {
-    return c.redirect(`/cards/${card.id}`)
+    return c.redirect(`/cards/${id}`)
   }
 
   try {
@@ -135,28 +176,50 @@ app.post('/cards/:id/upload-photo', requireAuth, async (c) => {
     const res = await fetch(CDN_UPLOAD, { method: 'POST', body: formData })
     if (!res.ok) throw new Error('CDN error')
     const { filename } = await res.json() as { filename: string }
-    const id = filename.replace(/\.[^/.]+$/, '')
-    card.driver.photo = `${CDN_BASE}/${id}`
-    return c.redirect(`/cards/${card.id}?saved=1`)
+    const fileId = filename.replace(/\.[^/.]+$/, '')
+    const photoUrl = `${CDN_BASE}/${fileId}`
+    const db = await getDb()
+    await db.collection('fleets').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { driverPhoto: photoUrl } }
+    )
+    return c.redirect(`/cards/${id}?saved=1`)
   } catch {
-    return c.redirect(`/cards/${card.id}?uploadError=1`)
+    return c.redirect(`/cards/${id}?uploadError=1`)
   }
 })
 
 // Remove driver photo
-app.post('/cards/:id/remove-photo', requireAuth, (c) => {
-  const card = cards.find(card => card.id === c.req.param('id'))
-  if (!card) return c.redirect('/dashboard')
-  card.driver.photo = undefined
-  return c.redirect(`/cards/${card.id}?saved=1`)
+app.post('/cards/:id/remove-photo', requireAuth, async (c) => {
+  const id = c.req.param('id')
+  try {
+    const db = await getDb()
+    await db.collection('fleets').updateOne(
+      { _id: new ObjectId(id) },
+      { $unset: { driverPhoto: '' } }
+    )
+  } catch (err) {
+    console.error('[remove-photo] DB error:', err)
+  }
+  return c.redirect(`/cards/${id}?saved=1`)
 })
 
 // Toggle active/inactive
-app.post('/cards/:id/toggle-status', requireAuth, (c) => {
-  const card = cards.find(card => card.id === c.req.param('id'))
-  if (!card || card.status === 'suspended') return c.redirect('/dashboard')
-  card.status = card.status === 'active' ? 'inactive' : 'active'
-  return c.redirect(`/cards/${card.id}`)
+app.post('/cards/:id/toggle-status', requireAuth, async (c) => {
+  const id = c.req.param('id')
+  const card = await loadCard(id)
+  if (!card || !['active', 'inactive'].includes(card.status)) return c.redirect('/dashboard')
+  const newStatus = card.status === 'active' ? 'inactive' : 'active'
+  try {
+    const db = await getDb()
+    await db.collection('fleets').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: newStatus } }
+    )
+  } catch (err) {
+    console.error('[toggle-status] DB error:', err)
+  }
+  return c.redirect(`/cards/${id}`)
 })
 
 export default app

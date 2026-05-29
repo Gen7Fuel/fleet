@@ -1,7 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { Layout } from './Layout'
 import type { FleetCard } from '../types'
-import { getCurrentMonthSpend } from '../data/demo'
 
 interface CardDetailPageProps {
   username: string
@@ -15,10 +14,12 @@ function statusBadge(status: string) {
   const styles: Record<string, string> = {
     active: 'bg-green-100 text-green-700 border-green-200',
     inactive: 'bg-slate-100 text-slate-500 border-slate-200',
-    suspended: 'bg-red-100 text-red-600 border-red-200',
+    lost: 'bg-orange-100 text-orange-600 border-orange-200',
+    stolen: 'bg-red-100 text-red-600 border-red-200',
+    cancelled: 'bg-slate-100 text-slate-400 border-slate-200',
   }
   return (
-    <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${styles[status] ?? 'bg-slate-100 text-slate-500'}`}>
+    <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${styles[status] ?? 'bg-slate-100 text-slate-500 border-slate-200'}`}>
       {status.toUpperCase()}
     </span>
   )
@@ -43,7 +44,7 @@ function SectionHeading({ children }: { children: any }) {
 }
 
 function Field({ label, name, value, type = 'text', placeholder = '', required = false }: {
-  label: string; name: string; value: string | number; type?: string; placeholder?: string; required?: boolean
+  label: string; name: string; value: string; type?: string; placeholder?: string; required?: boolean
 }) {
   return (
     <div>
@@ -51,7 +52,7 @@ function Field({ label, name, value, type = 'text', placeholder = '', required =
       <input
         type={type}
         name={name}
-        value={String(value)}
+        value={value}
         placeholder={placeholder}
         required={required}
         class="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -60,19 +61,17 @@ function Field({ label, name, value, type = 'text', placeholder = '', required =
   )
 }
 
-export function CardDetailPage({ username, company, card, saved, uploadError }: CardDetailPageProps) {
-  const monthSpend = getCurrentMonthSpend(card)
-  const spendPct = Math.min((monthSpend / card.monthlySpendingLimit) * 100, 100)
-  const barColor = spendPct >= 90 ? 'bg-red-500' : spendPct >= 70 ? 'bg-amber-400' : 'bg-blue-500'
+function formatCardNumber(num: string): string {
+  const clean = num.replace(/\D/g, '')
+  if (clean.length === 16) return `**** **** **** ${clean.slice(12)}`
+  return num
+}
 
-  const fuelOptions: { value: string; label: string }[] = [
-    { value: 'any', label: 'Any Fuel' },
-    { value: 'diesel', label: 'Diesel Only' },
-    { value: 'petrol', label: 'Petrol Only' },
-  ]
+export function CardDetailPage({ username, company, card, saved, uploadError }: CardDetailPageProps) {
+  const canToggle = card.status === 'active' || card.status === 'inactive'
 
   return (
-    <Layout title={`Card ···· ${card.last4}`} username={username} company={company}>
+    <Layout title={`Card ${formatCardNumber(card.fleetCardNumber)}`} username={username} company={company}>
       {/* Back link */}
       <a href="/dashboard" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -90,13 +89,15 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
             </svg>
           </div>
           <div>
-            <p class="font-mono text-lg font-semibold text-slate-900">{card.cardNumber}</p>
-            <p class="text-xs text-slate-400">Issued {card.issuedDate} · {card.driver.name}</p>
+            <p class="font-mono text-lg font-semibold text-slate-900">{formatCardNumber(card.fleetCardNumber)}</p>
+            <p class="text-xs text-slate-400">
+              {card.issuedDate ? `Issued ${card.issuedDate} · ` : ''}{card.driverName || 'No driver assigned'}
+            </p>
           </div>
         </div>
         <div class="flex items-center gap-3">
           {statusBadge(card.status)}
-          {card.status !== 'suspended' && (
+          {canToggle && (
             <form method="POST" action={`/cards/${card.id}/toggle-status`}>
               <button
                 type="submit"
@@ -110,8 +111,8 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
               </button>
             </form>
           )}
-          {card.status === 'suspended' && (
-            <span class="text-xs text-slate-400 italic">Contact support to unsuspend</span>
+          {!canToggle && (
+            <span class="text-xs text-slate-400 italic">Contact support to change status</span>
           )}
         </div>
       </div>
@@ -142,15 +143,15 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <SectionHeading>Driver Information</SectionHeading>
               <div class="space-y-4">
-                <Field label="Driver Name" name="driverName" value={card.driver.name} required />
+                <Field label="Driver Name" name="driverName" value={card.driverName} required />
                 <div>
                   <label class="block text-sm font-medium text-slate-700 mb-2">
                     Driver Photo <span class="text-slate-400 font-normal">(optional)</span>
                   </label>
-                  {card.driver.photo ? (
+                  {card.driverPhoto ? (
                     <div class="flex items-center gap-4">
                       <img
-                        src={card.driver.photo}
+                        src={card.driverPhoto}
                         alt="Driver photo"
                         class="w-16 h-16 rounded-full object-cover border border-slate-200 flex-shrink-0"
                       />
@@ -220,39 +221,19 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <SectionHeading>Vehicle Information</SectionHeading>
               <div class="space-y-4">
-                <Field label="Number Plate" name="numberPlate" value={card.vehicle.numberPlate} required placeholder="ABC-123" />
-                <div class="grid grid-cols-2 gap-3">
-                  <Field label="Make" name="vehicleMake" value={card.vehicle.make} required />
-                  <Field label="Model" name="vehicleModel" value={card.vehicle.model} required />
-                </div>
-                <Field label="Year" name="vehicleYear" value={card.vehicle.year} type="number" required />
+                <Field label="Number Plate" name="numberPlate" value={card.numberPlate} required placeholder="ABC-123" />
+                <Field label="Make & Model" name="vehicleMakeModel" value={card.vehicleMakeModel} placeholder="e.g. Toyota HiLux" />
               </div>
             </div>
 
             {/* Card settings */}
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <SectionHeading>Card Settings</SectionHeading>
-              <div class="space-y-4">
-                <Field label="Monthly Spending Limit ($)" name="spendingLimit" value={card.monthlySpendingLimit} type="number" required />
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-1.5">Fuel Type Restriction</label>
-                  <select
-                    name="fuelType"
-                    class="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
-                  >
-                    {fuelOptions.map(opt => (
-                      <option value={opt.value} selected={card.fuelType === opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-1.5">PIN Status</label>
-                  <div class="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                    {pinBadge(card.pinStatus)}
-                    <span class="text-xs text-slate-400">Managed by Gen7</span>
-                  </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">PIN Status</label>
+                <div class="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+                  {pinBadge(card.pinStatus)}
+                  <span class="text-xs text-slate-400">Managed by Gen7</span>
                 </div>
               </div>
             </div>
@@ -267,21 +248,7 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
         </div>
 
         {/* Transaction history — 3/5 */}
-        <div class="lg:col-span-3 space-y-5">
-          {/* Spend summary */}
-          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-            <SectionHeading>Monthly Spend</SectionHeading>
-            <div class="flex items-end gap-2 mb-3">
-              <span class="text-2xl font-bold text-slate-900">${monthSpend.toFixed(2)}</span>
-              <span class="text-slate-400 text-sm pb-0.5">of ${card.monthlySpendingLimit.toLocaleString()} limit</span>
-            </div>
-            <div class="w-full bg-slate-100 rounded-full h-2">
-              <div class={`${barColor} h-2 rounded-full`} style={`width:${spendPct}%`}></div>
-            </div>
-            <p class="text-xs text-slate-400 mt-2">{spendPct.toFixed(0)}% of monthly limit used</p>
-          </div>
-
-          {/* Transactions */}
+        <div class="lg:col-span-3">
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
             <SectionHeading>Transaction History</SectionHeading>
             {card.transactions.length === 0 ? (

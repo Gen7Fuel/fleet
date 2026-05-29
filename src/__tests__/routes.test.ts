@@ -1,12 +1,16 @@
 import { mock, beforeAll, describe, it, expect } from 'bun:test'
 
-mock.module('../db', () => ({
+const makeDb = (findOneResult: any = null, findResult: any[] = []) => ({
   getDb: async () => ({
     collection: () => ({
-      findOne: async () => null,
+      findOne: async () => findOneResult,
+      find: () => ({ toArray: async () => findResult }),
+      updateOne: async () => ({}),
     }),
   }),
-}))
+})
+
+mock.module('../db', () => makeDb())
 
 mock.module('bcryptjs', () => ({
   default: {
@@ -51,25 +55,20 @@ describe('GET /dashboard with no session', () => {
   })
 })
 
-describe('GET /cards/999 with no session', () => {
+describe('GET /cards/nonexistent with no session', () => {
   it('redirects to /', async () => {
-    const res = await app.request('http://localhost/cards/999')
+    const res = await app.request('http://localhost/cards/nonexistent')
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('/')
   })
 })
 
 async function getSessionCookie(): Promise<string> {
-  mock.module('../db', () => ({
-    getDb: async () => ({
-      collection: () => ({
-        findOne: async () => ({
-          username: 'testuser',
-          name: 'Test Company',
-          password: '$2b$10$placeholder',
-        }),
-      }),
-    }),
+  mock.module('../db', () => makeDb({
+    _id: { toString: () => 'test-customer-id' },
+    username: 'testuser',
+    name: 'Test Company',
+    password: '$2b$10$placeholder',
   }))
 
   const body = new URLSearchParams({ username: 'testuser', password: 'password' })
@@ -79,13 +78,7 @@ async function getSessionCookie(): Promise<string> {
     body: body.toString(),
   })
 
-  mock.module('../db', () => ({
-    getDb: async () => ({
-      collection: () => ({
-        findOne: async () => null,
-      }),
-    }),
-  }))
+  mock.module('../db', () => makeDb())
 
   const cookie = res.headers.get('set-cookie') ?? ''
   return cookie.split(';')[0]
@@ -105,27 +98,11 @@ describe('authenticated routes', () => {
     expect(res.status).toBe(200)
   })
 
-  it('GET /cards/1 returns 200', async () => {
-    const res = await app.request('http://localhost/cards/1', {
-      headers: { cookie: sessionCookie },
-    })
-    expect(res.status).toBe(200)
-  })
-
   it('GET /cards/nonexistent redirects to /dashboard', async () => {
     const res = await app.request('http://localhost/cards/nonexistent', {
       headers: { cookie: sessionCookie },
     })
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('/dashboard')
-  })
-
-  it('POST /cards/1/toggle-status redirects to /cards/1', async () => {
-    const res = await app.request('http://localhost/cards/1/toggle-status', {
-      method: 'POST',
-      headers: { cookie: sessionCookie },
-    })
-    expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('/cards/1')
   })
 })

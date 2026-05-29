@@ -1,5 +1,4 @@
-export type CardStatus = 'active' | 'inactive' | 'suspended'
-export type FuelType = 'any' | 'diesel' | 'petrol'
+export type CardStatus = 'active' | 'inactive' | 'lost' | 'stolen' | 'cancelled'
 export type PinStatus = 'set' | 'not_set' | 'locked'
 
 export interface Transaction {
@@ -14,22 +13,17 @@ export interface Transaction {
 
 export interface FleetCard {
   id: string
-  cardNumber: string
-  last4: string
+  fleetCardNumber: string
   status: CardStatus
-  driver: {
-    name: string
-    photo?: string
-  }
-  vehicle: {
-    numberPlate: string
-    make: string
-    model: string
-    year: number
-  }
-  monthlySpendingLimit: number
-  fuelType: FuelType
+  driverName: string
+  driverPhoto?: string
+  vehicleMakeModel: string
+  numberPlate: string
+  customerName: string
+  customerId: string
+  site: string
+  notes: string
   pinStatus: PinStatus
+  issuedDate?: string
   transactions: Transaction[]
-  issuedDate: string
 }
