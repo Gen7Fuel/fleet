@@ -9,6 +9,7 @@ import { LoginPage } from './components/LoginPage'
 import { DashboardPage } from './components/DashboardPage'
 import { CardDetailPage } from './components/CardDetailPage'
 import type { FleetCard, CardStatus, PinStatus } from './types'
+import { sendCardStatusEmail } from './email'
 
 const CDN_UPLOAD = 'https://app.gen7fuel.com/cdn/upload'
 const CDN_BASE   = 'https://app.gen7fuel.com/cdn/download'
@@ -235,6 +236,14 @@ app.post('/cards/:id/toggle-status', requireAuth, async (c) => {
       { _id: new ObjectId(id) },
       { $set: { status: newStatus } }
     )
+    sendCardStatusEmail({
+      cardNumber: card.fleetCardNumber,
+      driverName: card.driverName,
+      company: c.get('company'),
+      oldStatus: card.status,
+      newStatus,
+      performedBy: c.get('username'),
+    }).catch(err => console.error('[toggle-status] email error:', err))
   } catch (err) {
     console.error('[toggle-status] DB error:', err)
   }
