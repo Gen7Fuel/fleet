@@ -4,20 +4,22 @@ import type { Context } from 'hono'
 interface Session {
   username: string
   company: string
+  customerId: string
   createdAt: number
 }
 
 export interface SessionData {
   username: string
   company: string
+  customerId: string
 }
 
 const sessions = new Map<string, Session>()
 const SESSION_TTL = 24 * 60 * 60 * 1000
 
-export function createSession(c: Context, username: string, company: string): void {
+export function createSession(c: Context, username: string, company: string, customerId: string): void {
   const id = crypto.randomUUID()
-  sessions.set(id, { username, company, createdAt: Date.now() })
+  sessions.set(id, { username, company, customerId, createdAt: Date.now() })
   setCookie(c, 'fleet_session', id, {
     httpOnly: true,
     path: '/',
@@ -35,7 +37,7 @@ export function getSession(c: Context): SessionData | null {
     sessions.delete(id)
     return null
   }
-  return { username: session.username, company: session.company }
+  return { username: session.username, company: session.company, customerId: session.customerId }
 }
 
 export function destroySession(c: Context): void {
