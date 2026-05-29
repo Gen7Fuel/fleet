@@ -1,13 +1,18 @@
 services:
   fleet-portal:
-    build: .
+    image: ${FLEET_IMAGE}
     container_name: fleet-portal
     restart: unless-stopped
     ports:
       - "6000:3000"
     environment:
       - NODE_ENV=production
-      - MONGO_URI=mongodb://mongo:27017/thehub
+      - MONGO_URI=${MONGO_URI}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - thehub_default
       - internal
