@@ -4,11 +4,12 @@ export type PinStatus = 'set' | 'not_set' | 'locked'
 export interface Transaction {
   id: string
   date: string
-  location: string
-  fuelType: string
-  litres: number
-  pricePerLitre: number
+  stationName: string
+  productCode: string
+  quantity: number
   amount: number
+  source: string
+  receipt?: string
 }
 
 export interface FleetCard {

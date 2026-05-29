@@ -54,6 +54,24 @@ async function loadCard(id: string): Promise<FleetCard | null> {
   }
 }
 
+async function loadTransactions(fleetCardNumber: string): Promise<import('./types').Transaction[]> {
+  const db = await getDb()
+  const docs = await db.collection('transactions')
+    .find({ fleetCardNumber }, { projection: { signature: 0 } })
+    .sort({ date: -1 })
+    .toArray()
+  return docs.map(doc => ({
+    id: doc._id.toString(),
+    date: new Date(doc.date).toISOString().slice(0, 10),
+    stationName: String(doc.stationName ?? ''),
+    productCode: String(doc.productCode ?? ''),
+    quantity: Number(doc.quantity ?? 0),
+    amount: Number(doc.amount ?? 0),
+    source: String(doc.source ?? ''),
+    receipt: doc.receipt ? String(doc.receipt) : undefined,
+  }))
+}
+
 async function requireAuth(c: any, next: any) {
   const session = getSession(c)
   if (!session) return c.redirect('/')
@@ -114,6 +132,8 @@ app.get('/dashboard', requireAuth, async (c) => {
 app.get('/cards/:id', requireAuth, async (c) => {
   const card = await loadCard(c.req.param('id'))
   if (!card) return c.redirect('/dashboard')
+  const transactions = await loadTransactions(card.fleetCardNumber)
+  card.transactions = transactions
   return c.html(
     <CardDetailPage
       username={c.get('username')}

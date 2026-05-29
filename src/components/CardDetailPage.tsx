@@ -259,9 +259,9 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
                   <thead>
                     <tr class="text-left text-xs text-slate-400 border-b border-slate-100">
                       <th class="pb-2 pr-4 font-medium">Date</th>
-                      <th class="pb-2 pr-4 font-medium hidden sm:table-cell">Location</th>
-                      <th class="pb-2 pr-4 font-medium hidden md:table-cell">Fuel</th>
-                      <th class="pb-2 pr-4 font-medium hidden md:table-cell text-right">Litres</th>
+                      <th class="pb-2 pr-4 font-medium hidden sm:table-cell">Station</th>
+                      <th class="pb-2 pr-4 font-medium hidden md:table-cell">Product</th>
+                      <th class="pb-2 pr-4 font-medium hidden md:table-cell text-right">Qty (L)</th>
                       <th class="pb-2 font-medium text-right">Amount</th>
                     </tr>
                   </thead>
@@ -269,9 +269,9 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
                     {card.transactions.map(tx => (
                       <tr class="hover:bg-slate-50 transition-colors">
                         <td class="py-2.5 pr-4 text-slate-600 whitespace-nowrap">{tx.date}</td>
-                        <td class="py-2.5 pr-4 text-slate-500 hidden sm:table-cell whitespace-nowrap">{tx.location}</td>
-                        <td class="py-2.5 pr-4 text-slate-500 hidden md:table-cell">{tx.fuelType}</td>
-                        <td class="py-2.5 pr-4 text-slate-500 hidden md:table-cell text-right">{tx.litres.toFixed(1)}L</td>
+                        <td class="py-2.5 pr-4 text-slate-500 hidden sm:table-cell whitespace-nowrap">{tx.stationName || '—'}</td>
+                        <td class="py-2.5 pr-4 text-slate-500 hidden md:table-cell">{tx.productCode || '—'}</td>
+                        <td class="py-2.5 pr-4 text-slate-500 hidden md:table-cell text-right">{tx.quantity.toFixed(1)}</td>
                         <td class="py-2.5 text-slate-900 font-semibold text-right whitespace-nowrap">${tx.amount.toFixed(2)}</td>
                       </tr>
                     ))}
