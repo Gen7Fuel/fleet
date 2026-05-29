@@ -46,12 +46,14 @@ app.post('/login', async (c) => {
       .collection('fleetcustomers')
       .findOne({ username })
 
+    console.log('[login] username:', username, '| account found:', !!account)
     if (account && await bcrypt.compare(password, String(account.password))) {
       createSession(c, String(account.username), String(account.name))
       return c.redirect('/dashboard')
     }
-  } catch {
-    // DB unavailable — fall through to error redirect
+    if (account) console.log('[login] password mismatch')
+  } catch (err) {
+    console.error('[login] DB error:', err)
   }
 
   return c.redirect('/?error=1')
