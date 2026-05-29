@@ -1,13 +1,13 @@
 services:
   fleet-portal:
-    image: ${FLEET_IMAGE}
+    image: fleet-portal:latest
+    build: .
     container_name: fleet-portal
     restart: unless-stopped
     ports:
       - "6000:3000"
-    environment:
-      - NODE_ENV=production
-      - MONGO_URI=${MONGO_URI}
+    env_file:
+      - .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 10s

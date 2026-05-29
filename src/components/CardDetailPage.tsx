@@ -25,15 +25,6 @@ function statusBadge(status: string) {
   )
 }
 
-function pinBadge(pinStatus: string) {
-  const config: Record<string, { color: string; label: string }> = {
-    set: { color: 'bg-green-100 text-green-700', label: 'PIN Set' },
-    not_set: { color: 'bg-amber-100 text-amber-700', label: 'PIN Not Set' },
-    locked: { color: 'bg-red-100 text-red-700', label: 'PIN Locked' },
-  }
-  const { color, label } = config[pinStatus] ?? config['not_set']
-  return <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${color}`}>{label}</span>
-}
 
 function SectionHeading({ children }: { children: any }) {
   return (
@@ -98,18 +89,17 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
         <div class="flex items-center gap-3">
           {statusBadge(card.status)}
           {canToggle && (
-            <form method="POST" action={`/cards/${card.id}/toggle-status`}>
-              <button
-                type="submit"
-                class={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  card.status === 'active'
-                    ? 'border-red-200 text-red-600 hover:bg-red-50'
-                    : 'border-green-200 text-green-600 hover:bg-green-50'
-                }`}
-              >
-                {card.status === 'active' ? 'Deactivate' : 'Activate'}
-              </button>
-            </form>
+            <button
+              type="button"
+              onclick="document.getElementById('status-modal').classList.remove('hidden')"
+              class={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                card.status === 'active'
+                  ? 'border-red-200 text-red-600 hover:bg-red-50'
+                  : 'border-green-200 text-green-600 hover:bg-green-50'
+              }`}
+            >
+              {card.status === 'active' ? 'Deactivate' : 'Activate'}
+            </button>
           )}
           {!canToggle && (
             <span class="text-xs text-slate-400 italic">Contact support to change status</span>
@@ -226,18 +216,6 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
               </div>
             </div>
 
-            {/* Card settings */}
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-              <SectionHeading>Card Settings</SectionHeading>
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1.5">PIN Status</label>
-                <div class="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                  {pinBadge(card.pinStatus)}
-                  <span class="text-xs text-slate-400">Managed by Gen7</span>
-                </div>
-              </div>
-            </div>
-
             <button
               type="submit"
               class="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
@@ -290,6 +268,53 @@ export function CardDetailPage({ username, company, card, saved, uploadError }: 
           </div>
         </div>
       </div>
+      {/* Status toggle confirmation modal */}
+      {canToggle && (
+        <>
+          <form id="toggle-status-form" method="POST" action={`/cards/${card.id}/toggle-status`} class="hidden" />
+          <div id="status-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
+              <div class="flex items-center gap-3 mb-3">
+                <div class={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${card.status === 'active' ? 'bg-red-100' : 'bg-green-100'}`}>
+                  {card.status === 'active' ? (
+                    <svg class="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  ) : (
+                    <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <h3 class="text-base font-semibold text-slate-900">
+                  {card.status === 'active' ? 'Deactivate Card?' : 'Activate Card?'}
+                </h3>
+              </div>
+              <p class="text-sm text-slate-500 mb-6">
+                {card.status === 'active'
+                  ? `Card ${formatCardNumber(card.fleetCardNumber)} will be deactivated and can no longer be used for fuel purchases.`
+                  : `Card ${formatCardNumber(card.fleetCardNumber)} will be activated and enabled for fuel purchases.`}
+              </p>
+              <div class="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onclick="document.getElementById('status-modal').classList.add('hidden')"
+                  class="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onclick="document.getElementById('toggle-status-form').submit()"
+                  class={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${card.status === 'active' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                >
+                  {card.status === 'active' ? 'Yes, Deactivate' : 'Yes, Activate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Layout>
   )
 }
