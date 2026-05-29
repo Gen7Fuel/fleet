@@ -65,7 +65,6 @@ describe('GET /cards/nonexistent with no session', () => {
 
 async function getSessionCookie(): Promise<string> {
   mock.module('../db', () => makeDb({
-    _id: { toString: () => 'test-customer-id' },
     username: 'testuser',
     name: 'Test Company',
     password: '$2b$10$placeholder',
