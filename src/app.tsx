@@ -13,7 +13,7 @@ import type { FleetCard, CardStatus, PinStatus } from './types'
 const CDN_UPLOAD = 'https://app.gen7fuel.com/cdn/upload'
 const CDN_BASE   = 'https://app.gen7fuel.com/cdn/download'
 
-type Variables = { username: string; company: string; customerId: string }
+type Variables = { username: string; company: string }
 
 const app = new Hono<{ Variables: Variables }>()
 
@@ -38,9 +38,9 @@ function docToCard(doc: any): FleetCard {
   }
 }
 
-async function loadCards(customerId: string): Promise<FleetCard[]> {
+async function loadCards(customerName: string): Promise<FleetCard[]> {
   const db = await getDb()
-  const docs = await db.collection('fleets').find({ customerId }).toArray()
+  const docs = await db.collection('fleets').find({ customerName }).toArray()
   return docs.map(docToCard)
 }
 
@@ -59,7 +59,6 @@ async function requireAuth(c: any, next: any) {
   if (!session) return c.redirect('/')
   c.set('username', session.username)
   c.set('company', session.company)
-  c.set('customerId', session.customerId)
   await next()
 }
 
@@ -82,7 +81,7 @@ app.post('/login', async (c) => {
 
     console.log('[login] username:', username, '| account found:', !!account)
     if (account && await bcrypt.compare(password, String(account.password))) {
-      createSession(c, String(account.username), String(account.name), account._id.toString())
+      createSession(c, String(account.username), String(account.name))
       return c.redirect('/dashboard')
     }
     if (account) console.log('[login] password mismatch')
@@ -101,7 +100,7 @@ app.get('/logout', (c) => {
 
 // Dashboard
 app.get('/dashboard', requireAuth, async (c) => {
-  const cards = await loadCards(c.get('customerId'))
+  const cards = await loadCards(c.get('company'))
   return c.html(
     <DashboardPage
       username={c.get('username')}
